@@ -11,8 +11,8 @@
  */
 
 define('PROJECT_', 'PHPSMPClass');
-define('VERSION_', '0.1.3.1');
-define('DATE_', '2011-03-24 11:20:00');
+define('VERSION_', '0.1.3.3');
+define('DATE_', '2011-10-11 17:00:00');
 define('MAXX', 'author: Klyunnikov Maksim <klyunnikov.maksim@gmail.com>, icq: 335521857');
 define('HOST', '127.0.0.1');
 define('PORT', '10001');
@@ -1089,6 +1089,13 @@ class PHPSMPClass {
 		}
 		fclose($handle);
 		
+		//На всякий случай меняем табуляцию на пробел
+		$md5_cfg = md5($buffer_out);
+		$buffer_out = str_replace("\t", " ", $buffer_out);
+		if(md5($buffer_out) != $md5_cfg) {
+			$this->Log("Found in the configuration '\\t'");
+		}
+		
 		#Парсим CONF
 		$arr_conf_temp = explode('CONF ', $buffer_out);
 		
@@ -1125,15 +1132,24 @@ class PHPSMPClass {
 			return false;
 		}
 		
-		#Парсим SLOT
-		foreach ($arr_module as $key1 => $value1) {
-			foreach ($value1 as $key => $value) {
-				$arr_slot_temp = explode('SLOT ', $value);
+		#Парсим SLOT и AIR
+		foreach ($arr_module as $conf_k => $conf_v) {
+			foreach ($conf_v as $module_k => $module_v) {
 				
-				foreach ($arr_slot_temp as $key_arr => $value_arr) {
-					if (preg_match("/^\s*\[(\d{1,3}|\d{1,3}-\d{1,3})\]\s*{(.*)}\s*/", $value_arr, $pr_mas)) { 
-						$arr_slot[$key1][$key][$pr_mas[1]] = $pr_mas[2];
+				if(preg_match_all("/(SLOT|AIR)\s*\[(\d{1,3}|\d{1,3}-\d{1,3})\](\s*{.*}\s*})/U", $module_v, $m)) {
+					
+					#http://www.php.net/manual/ru/function.preg-match-all.php#102520
+					$rt = array();
+					for ($z = 0;$z < count($m);$z++) {
+						for ($x = 0;$x < count($m[$z]);$x++) {
+							$rt[$x][$z] = $m[$z][$x];
+						}
 					}
+					foreach ($rt as $arr_port_temp_k => $arr_port_temp_v){
+						$arr_slot[$conf_k][$module_k][$arr_port_temp_v[1]][$arr_port_temp_v[2]] = $arr_port_temp_v[3];
+					}
+				} else {
+					$this->Log("CONF=$conf_k MODULE=$module_k TUNEs - not found //". $this->arr_module_name[$module_k]);
 				}
 			}
 		}
@@ -1143,14 +1159,16 @@ class PHPSMPClass {
 		}
 		
 		#Парсим PORT
-		foreach ($arr_slot as $key2 => $value2) {
-			foreach ($value2 as $key1 => $value1) {
-				foreach ($value1 as $key => $value) {
-					$arr_slot_temp = explode('PORT ', $value);
-					
-					foreach ($arr_slot_temp as $key_arr => $value_arr) {
-						if (preg_match("/^\s*\[(\d{1,3}|\d{1,3}-\d{1,3})\]\s*{(.*)}\s*/", $value_arr, $pr_mas)) {
-							$arr_port[$key2][$key1][$key][$pr_mas[1]] = $pr_mas[2];
+		foreach ($arr_slot as $conf_k => $conf_v) {
+			foreach ($conf_v as $module_k => $module_v) {
+				foreach ($module_v as $slot_air_k => $slot_air_v) {
+					foreach ($slot_air_v as $slot_k => $slot_v) {
+						$arr_slot_temp = explode('PORT ', $slot_v);
+						
+						foreach ($arr_slot_temp as $port_k => $port_v) {
+							if (preg_match("/^\s*\[(\d{1,3}|\d{1,3}-\d{1,3})\]\s*{(.*)}\s*/", $port_v, $port_pr)) {
+								$arr_port[$conf_k][$module_k ][$slot_air_k][$slot_k][$port_pr[1]] = $port_pr[2];
+							}
 						}
 					}
 				}
@@ -1161,13 +1179,15 @@ class PHPSMPClass {
 			return false;
 		}
 		
-		#Парсим NUMBERA
-		foreach ($arr_port as $key3 => $value3) {
-			foreach ($value3 as $key2 => $value2) {
-				foreach ($value2 as $key1 => $value1) {
-					foreach ($value1 as $key => $value) {
-						if (preg_match("/^.*NUMBERA\s*=\s*\"(\d{1,7}|\d{1,7}[-+])\".*/", $value, $pr_mas)) {
-							$arr_numbera[$key3][$key2][$key1][$key] = $pr_mas[1];
+		#Парсим NUMBERA #TODO:лишний цикл (up)
+		foreach ($arr_port as $conf_k => $conf_v) {
+			foreach ($conf_v as $module_k => $module_v) {
+				foreach ($module_v as $slot_air_k => $slot_air_v) {
+					foreach ($slot_air_v as $slot_k => $slot_v) {
+						foreach ($slot_v as $port_k => $numbera_v) {
+							if (preg_match("/^.*NUMBERA\s*=\s*\"(\d{1,7}|\d{1,7}[-+])\".*/", $numbera_v, $numbera_v_pr)) {
+								$arr_numbera[$conf_k][$module_k][$slot_air_k][$slot_k][$port_k] = $numbera_v_pr[1];
+							}
 						}
 					}
 				}
@@ -1182,56 +1202,59 @@ class PHPSMPClass {
 		$deb = 1;
 		
 		#Создаем массив модулей и телефонов
-		foreach ($arr_numbera as $conf => $value4) {
-			foreach ($value4 as $module => $value3) {
-				foreach ($value3 as $slot => $value2) {
-					foreach ($value2 as $port => $number) {
-						
-						//print "$conf $module $slot $port $number" . $this->line_br;
-						
-						#slot
-						$slot_interval = explode("-", $slot);
-						if (count($slot_interval) == 1) {
-							$slot_interval[1] = $slot_interval[0];
-						}
-						
-						#port
-						$port_interval = explode("-", $port);
-						if (count($port_interval) == 1) {
-							$port_interval[1] = $port_interval[0];
-						}
-						
-						#number increment
-						if (strpos($number, '+')) {
-							$number_incremment = 1;
-							$number = rtrim($number,"+");
-						}
-						elseif (strpos($number, '-')) {
-							$number_incremment = -1;
-							$number = rtrim($number,"-");
-						}
-						else {
-							$number_incremment = 0;
-						}
-						
-						
-						for ($s = $slot_interval[0]; $s <= $slot_interval[1]; $s++) {
-							for ($p = $port_interval[0]; $p <= $port_interval[1]; $p++) {
-								//print $deb++ . ". CONF=$conf MODULE=$module SLOT=$s PORT=$p NUMBER=$number //". $this->arr_module_name[$module] . $this->line_br;
-								#Условие заполнения массива по номеру конфигурации
-								if ($number_conf == $conf) {
-									$this->arr_tunes[$number]['module'] = $module;
-									$this->arr_tunes[$number]['slot'] = $s;
-									$this->arr_tunes[$number]['port'] = $p;
+		foreach ($arr_numbera as $conf_k => $conf_v) {
+			foreach ($conf_v as $module_k => $module_v) {
+				foreach ($module_v as $slot_air_k => $slot_air_v) {
+					foreach ($slot_air_v as $slot_k => $slot_v) {
+						foreach ($slot_v as $port_k => $numbera_v) {
+							
+							//print "$conf $module $slot $port $number" . $this->line_br;
+							
+							#slot
+							$slot_interval = explode("-", $slot_k);
+							if (count($slot_interval) == 1) {
+								$slot_interval[1] = $slot_interval[0];
+							}
+							
+							#port
+							$port_interval = explode("-", $port_k);
+							if (count($port_interval) == 1) {
+								$port_interval[1] = $port_interval[0];
+							}
+							
+							#number increment
+							if (strpos($numbera_v, '+')) {
+								$number_incremment = 1;
+								$number = rtrim($numbera_v,"+");
+							}
+							elseif (strpos($numbera_v, '-')) {
+								$number_incremment = -1;
+								$number = rtrim($numbera_v,"-");
+							}
+							else {
+								$number_incremment = 0;
+								$number = $numbera_v;
+							}
+							
+							
+							for ($s = $slot_interval[0]; $s <= $slot_interval[1]; $s++) {
+								for ($p = $port_interval[0]; $p <= $port_interval[1]; $p++) {
+									//print $deb++ . ". CONF=$conf_k MODULE=$module_k SLOT_AIR=$slot_air_k SLOT=$s PORT=$p NUMBER=$number //". $this->arr_module_name[$module_k] . $this->line_br;
+									#Условие заполнения массива по номеру конфигурации
+									if ($number_conf == $conf_k) {
+										$this->arr_tunes[$number]['module'] = $module_k;
+										$this->arr_tunes[$number]['slot_air'] = $slot_air_k;
+										$this->arr_tunes[$number]['slot'] = $s;
+										$this->arr_tunes[$number]['port'] = $p;
+									}
+									$number = $number+$number_incremment ;
 								}
-								$number = $number+$number_incremment ;
 							}
 						}
 					}
 				}
 			}
 		}
-		
 		
 		$count_row_file_tunes = count($this->arr_tunes);
 		if ($count_row_file_tunes == 0) {
