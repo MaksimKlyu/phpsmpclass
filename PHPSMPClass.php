@@ -11,8 +11,8 @@
  */
 
 define('PROJECT_', 'PHPSMPClass');
-define('VERSION_', '0.1.3.3');
-define('DATE_', '2011-10-11 17:00:00');
+define('VERSION_', '0.1.3.4');
+define('DATE_', '2011-10-13 16:40:00');
 define('MAXX', 'author: Klyunnikov Maksim <klyunnikov.maksim@gmail.com>, icq: 335521857');
 define('HOST', '127.0.0.1');
 define('PORT', '10001');
@@ -280,87 +280,6 @@ class PHPSMPClass {
 		}
 		return true;
 	}
-
-	/*
-	 * Пробую работать с ats ELCOM
-	 *
-	 * @param $message, $timeout
-	 */
-	function ELCOM($message, $timeout = SOCKET_TIME_OUT) {
-		#Проверяем включен бинарный режим
-		if ($this->status_binmode) {
-			$this->_Error("BINARYMODE-ON! Delete Binmode(<pass>)");
-			return false;
-		}
-
-		if (trim($message) == '') {
-			$this->_Error("ELCOM.message == NULL");
-			return false;
-		}
-
-		if (trim($timeout) == '') {
-			$this->_Error("ELCOM.timeout == NULL");
-			return false;
-		}
-
-		$this->Log("ELCOM wait \$timeout = $timeout ...");
-		$this->F_e("stream_set_timeout");
-
-		/*
-		# Запрос номера 483214
-		T 192.168.0.7:40560 -> 192.168.0.140:5005 [AP]
-		  01 6e 06 00 ff ff 09 48    32 14 0a                   .n.....H2..
-		# Ответ1 (останется разобраться с пакетом)
-		T 192.168.0.140:5005 -> 192.168.0.7:40560 [AP]
-		  01 0c 04 00 0b 36 00 01    53                         .....6..S
-		## Ответ2 ((останется разобраться с пакетом))
-		T 192.168.0.140:5005 -> 192.168.0.7:40560 [AP]
-		  01 0c 13 00 0b 36 00 00    99 48 32 14 48 32 14 01    .....6...H2.H2..
-		  00 00 42 <d8> 15 00 63 a9
-		*/
-
-		/*
-		# Запись1 карточки номера 483214
-		T(6) 192.168.0.7:43311 -> 192.168.0.140:5005 [AP]
-		  01 6f 04 00 0b 36 00 01    b6                         .o...6...
-		## Запись2
-		T(6) 192.168.0.7:43311 -> 192.168.0.140:5005 [AP]
-		  01 6f 13 00 0b 36 00 00    99 48 32 14 48 32 14 01    .o...6...H2.H2..
-		  00 00 42 c8 15 00 63 fc                               ..B...c.
-		# Ответ
-		T(6) 192.168.0.140:5005 -> 192.168.0.7:43311 [AP]
-		  01 0e 02 00 6f 01 81                                  ....o..
-		#
-		*/
-
-		/*
-		# Запрос несуществующего номера 555555
-		T 192.168.0.7:55836 -> 192.168.0.140:5005 [AP]
-		  01 6e 06 00 ff ff 09 55    55 55 7b                   .n.....UUU{
-		## Ответ1 (останется разобраться с пакетом)
-		T 192.168.0.140:5005 -> 192.168.0.7:55836 [AP]
-		  01 1f 07 00 02 09 55 55    55 ff ff 2f                ......UUU../
-		*/
-
-		$r_sock = '';
-
-		$w_sock = "$message";
-
-		fwrite($this->socket, $w_sock);
-
-		stream_set_timeout($this->socket, $timeout); //таймаут
-		$info = stream_get_meta_data($this->socket);
-
-		while(!$info['timed_out']) { #работать по таймауту
-			$r_sock = fgets($this->socket, 4096);
-			$info = stream_get_meta_data($this->socket);
-			print_r($r_sock);
-			//print_r($info);
-		}
-		$this->Log("Done.");
-	}
-
-
 	/*
 	 * Для работы с TUNE
 	 *
@@ -1336,23 +1255,97 @@ class PHPSMPClass {
 		}
 	}
 	
+	function SendBinPacket ($GSCP_mes){
+		if (!($this->status_binmode)) {
+			$this->_Error("BINARYMODE-OFF! Add Binmode(<pass>)");
+			return false;
+		}
+		if(strlen($GSCP_mes) > 200) {
+			$this->_Error("LONG len \$GSCP_mes!");
+			return false;
+		}
+		
+		$GSCP_mes .= pack("C", 0x00);
+		#в GCSP режиме перед каждым сообщением пишется двухбайтовая длина сообщения (длина не включает эти 2 байта)
+		$w_sock = pack("CC", strlen($GSCP_mes), 0x00);
+		fwrite($this->socket, $w_sock, strlen($w_sock));
+		
+		#Передаем сам пакет, он должен быть не больше 200 байт.
+		$w_sock = $GSCP_mes;
+		fwrite($this->socket, $w_sock, strlen($w_sock));
+	}
+	
+	
+	/**
+	 * Установка времени в станции
+	 * @ShumBor
+	 * #TODO: сделать ответ от станции
+	 * @param - $stime UnixTime
+	 */
+	function SMPTimeUpdater($stime = '', $timeout = SOCKET_TIME_OUT) {
+		if (trim($timeout) == '') {
+			$this->_Error("SMPTimeUpdater.timeout == NULL");
+			return false;
+		}
+		
+		if (trim($stime == '')) {
+			$stime = strtotime("now");
+		}
+		
+		$this->Log("SMPTimeUpdater(\$stime=$stime, \$timeout=$timeout)...");
+		
+		$r_sock = '';
+		$r_sock_temp = '';
+		
+		$GSCP_mes = pack("CCCCCCCCCCCCCCC",0xff,0xff,0x00,0xff,0x05,0x00,0x55,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff);
+		$dstr = "settime " . date("j n Y G i s",$stime); // команда всем станциям!
+		//$dstr = 'reset'; // команда всем станциям!
+		$dstr = 'groupinfo'; // команда всем станциям!
+		
+		$GSCP_mes .= pack("A".strlen($dstr),$dstr);
+		
+		if($this->SendBinPacket($GSCP_mes)) {
+			return false;
+		}
+		
+		$this->F_e("stream_set_timeout");
+		
+		stream_set_timeout($this->socket, $timeout); //таймаут
+		$info = stream_get_meta_data($this->socket);
+		
+		while(!$info['timed_out']) {
+			$r_sock_temp = fgets($this->socket, 1024);
+			$r_sock .= $r_sock_temp;
+			$info = stream_get_meta_data($this->socket);
+		}
+		
+		//echo $this->Trace_HEX($r_sock) , "\n"; #debug
+		
+		$this->Log("#DEBUG. ($dstr): '$r_sock'");
+		return true;
+	}
+	
+	
 	/*
 	 * @author: dken
 	 *
 	 * @param string $bytes
 	 * @param string $prestr
 	 */
-	function Trace_HEX($bytes, $prestr = 'Trace_HEX:') {
+	function Trace_HEX($bytes, $prestr = 'Trace_HEX') {
+		
+		$bytes_len = strlen($bytes);
+		
 		if ($bytes == '') {
 			$res = ' NULL';
 		}
 		else {
 			$res='';
-			for($i=0;$i<strlen($bytes);$i++) {
+			for($i=0;$i<$bytes_len;$i++) {
 				$res .= sprintf(" %02X",ord($bytes[$i]));
 			}
 		}
-		return $prestr . $res;
+		return "<$prestr>" . $this->line_br . "Len: $bytes_len" . $this->line_br . $res . $this->line_br . "</$prestr>";
 	}
 
 	/**
