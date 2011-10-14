@@ -1300,7 +1300,7 @@ class PHPSMPClass {
 		$GSCP_mes = pack("CCCCCCCCCCCCCCC",0xff,0xff,0x00,0xff,0x05,0x00,0x55,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff);
 		$dstr = "settime " . date("j n Y G i s",$stime); // команда всем станциям!
 		//$dstr = 'reset'; // команда всем станциям!
-		$dstr = 'groupinfo'; // команда всем станциям!
+		//$dstr = 'groupinfo'; // команда всем станциям!
 		
 		$GSCP_mes .= pack("A".strlen($dstr),$dstr);
 		
