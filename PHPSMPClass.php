@@ -11,8 +11,8 @@
  */
 
 define('PROJECT_', 'PHPSMPClass');
-define('VERSION_', '0.1.3.4');
-define('DATE_', '2011-10-13 16:40:00');
+define('VERSION_', '0.1.3.6');
+define('DATE_', '2011-10-17 16:50:00');
 define('MAXX', 'author: Klyunnikov Maksim <klyunnikov.maksim@gmail.com>, icq: 335521857');
 define('HOST', '127.0.0.1');
 define('PORT', '10001');
@@ -147,26 +147,22 @@ class PHPSMPClass {
 	function Connect($host = HOST, $port = PORT) {
 		#Сброс переменой
 		$this->status_binmode = false;
-
-		if (trim($host) == '') {
-			$this->_Error("Connect.address = NULL");
-			return false;
-		}
-		if (trim($port) == '') {
-			$this->_Error("Connect.port = NULL");
+		
+		if ($host == '' || $port == '') {
+			$this->_Error(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 			return false;
 		}
 
 		$this->F_e("fsockopen");
 
-		$this->Log("Connect(\$host='$host', \$port=$port)...");
+		$this->Log(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 
 		if (!($this->socket = fsockopen($host, $port, $errno, $errstr, 3))) {
-			$this->_Error("Socket - $errstr. Error[$errno]");
+			$this->_Error(__METHOD__ . " - $errstr. Error[$errno]");
 			return false;
 		}
 		else {
-			$this->Log("Socket - OK.");
+			$this->Log(__METHOD__ . " - OK");
 		}
 		return true;
 	}
@@ -176,11 +172,14 @@ class PHPSMPClass {
 	 */
 	function Close() {
 		$this->F_e("fclose");
+		
+		$this->Log(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
+		
 		if (fclose($this->socket)) {
-			$this->Log('Socket_close - OK');
+			$this->Log(__METHOD__ . " - OK");
 		}
 		else {
-			$this->_Error('Socket_close - ERROR');
+			$this->_Error(__METHOD__ . " - ERROR");
 			return false;
 		}
 	}
@@ -198,18 +197,13 @@ class PHPSMPClass {
 			return false;
 		}
 
-		if (trim($passwd) == '') {
-			$this->_Error("Binmode.passwd == NULL");
-			return false;
-		}
-
-		if (trim($timeout) == '') {
-			$this->_Error("Binmode.timeout == NULL");
+		if (trim($passwd) == '' || trim($timeout) == '') {
+			$this->_Error(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 			return false;
 		}
 
 		$this->F_e("fgets");
-		$this->Log("Binmode(\$passwd=$passwd, \$timeout=$timeout)...");
+		$this->Log(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 		$ready_ok = false;
 		$r_sock = '';
 
@@ -232,7 +226,7 @@ class PHPSMPClass {
 				$this->_Error("R E A D Y - ERROR: it's no SComm. I_AM_SPIDER");
 				return false;
 			}
-			elseif (strlen($r_sock) > 256) { //если прийдет больше, чем положенно
+			elseif (strlen($r_sock) > 400) { //если прийдет больше, чем положенно
 				$this->_Error("R E A D Y - ERROR: $r_sock");
 				return false;
 			}
@@ -247,9 +241,8 @@ class PHPSMPClass {
 		}
 
 		$w_sock = "BINARYMODE-" . $passwd;
-		$this->Log("$w_sock");
-		fwrite($this->socket, $w_sock . "\n\r");
 		$this->Log("Wait: $w_sock...");
+		fwrite($this->socket, $w_sock . "\n\r");
 
 		$r_sock = '';
 
@@ -292,21 +285,11 @@ class PHPSMPClass {
 			return false;
 		}
 
-		if (trim($message) == '') {
-			$this->_Error("TUNE.message == NULL");
-			return false;
-		}
-
-		if (trim($timeout) == '') {
-			$this->_Error("TUNE.timeout == NULL");
-			return false;
-		}
-
 		$this->F_e("stream_set_timeout");
 		
 		$r_sock = '';
 		
-		$this->Log("TUNE_Lite(\$message='$message', \$timeout=$timeout)...");
+		$this->Log(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 
 		$w_sock = "$message\r";
 		fwrite($this->socket, $w_sock);
@@ -335,21 +318,11 @@ class PHPSMPClass {
 			return false;
 		}
 
-		if (trim($message) == '') {
-			$this->_Error("TUNE.message == NULL");
-			return false;
-		}
-
-		if (trim($timeout) == '') {
-			$this->_Error("TUNE.timeout == NULL");
-			return false;
-		}
-
 		$this->F_e("stream_set_timeout");
 		
 		$r_sock = '';
 		
-		$this->Log("TUNE(\$message='$message', \$timeout=$timeout)...");
+		$this->Log(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 
 		$w_sock = "$message\r";
 		fwrite($this->socket, $w_sock);
@@ -436,18 +409,19 @@ class PHPSMPClass {
 			return false;
 		}
 
-		if (trim($timeout) == '') {
-			$this->_Error("F6.timeout == NULL");
+		if (!is_numeric($timeout)) {
+			$this->_Error(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 			return false;
 		}
 
-		$this->Log("F6(\$timeout=$timeout)...");
+		$this->Log(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 
 		#hello
-		$w_sock = pack("CC",0x0F,0x00);
-		fwrite($this->socket, $w_sock);
-		$w_sock = pack("CCCCCCCCCCCCCCC",0xff,0x00,0x00,0x00,0x04,0x00,0x00,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff);
-		fwrite($this->socket, $w_sock, strlen ($w_sock));
+		$GSCP_mes = pack("CCCCCCCCCCCCCCC",0xff,0x00,0x00,0x00,0x04,0x00,0x00,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x00);
+		
+		if($this->SendBinPacket($GSCP_mes)) {
+			return false;
+		}
 
 		$r_sock = '';
 		$r_sock_temp = '';
@@ -501,11 +475,16 @@ class PHPSMPClass {
 	 */
 	function F6_STR($timeout = SOCKET_TIME_OUT) {
 
+		$this->Log(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
+		
 		$str = '';
-		$arr_f6 = $this->F6($timeout);
+		
+		if(!($arr_f6 = $this->F6($timeout))) {
+			return 'Error';
+		}
+		
 		if (count($arr_f6) == 0) {
 			return 'Ни один модуль не успел ответить';
-			exit;
 		}
 		
 		if (count($this->arr_module_name) != 0) {
@@ -630,34 +609,49 @@ class PHPSMPClass {
 
 		}
 
-		if (trim($timeout) == '') {
+		if (!is_numeric($timeout)) {
 			$arr_g_p[$number]['number'] = $number;
 			$arr_g_p[$number]['module'] = $module;
 			$arr_g_p[$number]['timeout'] = $timeout;
-			$arr_g_p[$number]['error'] = 'F2_GET.timeout == NULL';
+			$arr_g_p[$number]['error'] = 'F2_GET.timeout == is not numeric';
 			$this->_Error("F2_GET.timeout == NULL");
 			return $arr_g_p;
 		}
 		
-		if (!($module >= 1 && $module <= 128)) {
+		if ($module == Null) {
 			if(!($module = $this->Get_number_module($number))) {
 				$arr_g_p[$number]['number'] = $number;
 				$arr_g_p[$number]['module'] = $module;
 				$arr_g_p[$number]['timeout'] = $timeout;
 				$arr_g_p[$number]['error'] = 'F2_GET.number == number not found';
 				$this->_Error("F2_GET.number == number not found");
-			return $arr_g_p;
+				return $arr_g_p;
 			}
+		} elseif (!($module >= 1 && $module <= 128)) {
+			$arr_g_p[$number]['number'] = $number;
+			$arr_g_p[$number]['module'] = $module;
+			$arr_g_p[$number]['timeout'] = $timeout;
+			$arr_g_p[$number]['error'] = 'F2_GET.module == parametr wrong (1-128)';
+			$this->_Error("F2_GET.module == parametr wrong (1-128)");
+			return $arr_g_p;
 		}
 
-		$this->Log("F2_GET(\$number=$number, \$module=$module, \$timeout=$timeout)...");
+		$this->Log(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 
 		$num = '1' . $number; //дополняем, что бы не потерять нули в начале номера
 
+/*
 		$w_sock = pack("CC",0x0B,0x00);
 		fwrite($this->socket, $w_sock);
 		$w_sock = pack("CCCCCCCL",$module,0xfd,0xd8,0x00,0x20,0x00,0x12,(int)$num);
 		fwrite($this->socket, $w_sock, strlen ($w_sock));
+*/
+		
+		$GSCP_mes = pack("CCCCCCCL",$module,0xfd,0xd8,0x00,0x20,0x00,0x12,(int)$num);
+		
+		if($this->SendBinPacket($GSCP_mes)) {
+			return false;
+		}
 
 		$r_sock = '';
 		$r_sock_temp = '';
@@ -843,7 +837,7 @@ class PHPSMPClass {
 		
 		$arr_g_p[$number]['SET'] = $arr_g_p[$number]['GET'];
 
-		$this->Log("F2_SET(\$number=$number, \$module=$module, \$timeout=$timeout)...");
+		$this->Log(__METHOD__ ."($number, $module, $message_array, $timeout)");
 
 		####################################################################
 		foreach ($arr_g_p[$number]['SET'] as $key => $value) {
@@ -878,8 +872,6 @@ class PHPSMPClass {
 		$arr_g_p[$number]['SET']['_c17bit'] = base_convert(implode($arr_g_p[$number]['SET']['c17bit'],''),2,10);
 		$arr_g_p[$number]['SET']['_c18bit'] = base_convert(implode($arr_g_p[$number]['SET']['c18bit'],''),2,10);
 
-		$w_sock = pack("CC",0x3E,0x00);
-		fwrite($this->socket, $w_sock);
 		#Сборка пакета
 		$w_sock  = pack("CCCCCCCL",$module,0xE9,0x90,0x7C,0x1D,0x00,0x91,(int)$arr_g_p[$number]['SET']['number']);
 		$w_sock .= pack("C", $arr_g_p[$number]['SET']['_c14']);
@@ -906,8 +898,10 @@ class PHPSMPClass {
 		$w_sock .= pack("C", $arr_g_p[$number]['SET']['C62']);
 		$w_sock .= pack("C", $arr_g_p[$number]['SET']['C63']);
 		$w_sock .= pack("C", $arr_g_p[$number]['SET']['C64']);
-
-		fwrite($this->socket, $w_sock);
+		
+		if($this->SendBinPacket($w_sock)) {
+			return false;
+		}
 		#$this->Log($this->Trace_HEX($w_sock));
 
 		stream_set_timeout($this->socket, $timeout); //таймаут
@@ -984,7 +978,7 @@ class PHPSMPClass {
 		
 		$this->arr_tunes = array();
 		
-		$this->Log("Parse_file_SMPCFG(\$file_cfg='$file_cfg')...");
+		$this->Log(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 		
 		$start_read_file_tunes = microtime(1);
 		
@@ -1199,7 +1193,7 @@ class PHPSMPClass {
 		
 		$this->arr_tunes = array();
 		
-		$this->Log("Parse_file_SMPAdmin_win(\$file_tunes='$file_tunes')...");
+		$this->Log(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 		
 		$start_read_file_tunes = microtime(1);
 		
@@ -1237,7 +1231,7 @@ class PHPSMPClass {
 	 * Узнать номер модуля по номеру телефона
 	 */
 	function Get_number_module($number = '') {
-		$this->Log("Get_number_module(\$number = '$number')...");
+		$this->Log(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 		
 		if (trim($number) == '') {
 			$this->_Error("Get_number_module.number == NULL");
@@ -1265,10 +1259,11 @@ class PHPSMPClass {
 			return false;
 		}
 		
-		$GSCP_mes .= pack("C", 0x00);
 		#в GCSP режиме перед каждым сообщением пишется двухбайтовая длина сообщения (длина не включает эти 2 байта)
 		$w_sock = pack("CC", strlen($GSCP_mes), 0x00);
 		fwrite($this->socket, $w_sock, strlen($w_sock));
+		
+		//print "LEN: " . strlen($GSCP_mes) . "\n"; #DEBUG
 		
 		#Передаем сам пакет, он должен быть не больше 200 байт.
 		$w_sock = $GSCP_mes;
@@ -1292,16 +1287,17 @@ class PHPSMPClass {
 			$stime = strtotime("now");
 		}
 		
-		$this->Log("SMPTimeUpdater(\$stime=$stime, \$timeout=$timeout)...");
+		$this->Log(__METHOD__ ."(" .join(", ",func_get_args()) . ")");
 		
 		$r_sock = '';
 		$r_sock_temp = '';
 		
 		$GSCP_mes = pack("CCCCCCCCCCCCCCC",0xff,0xff,0x00,0xff,0x05,0x00,0x55,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff);
 		$dstr = "settime " . date("j n Y G i s",$stime); // команда всем станциям!
-		//$dstr = 'reset'; // команда всем станциям!
-		//$dstr = 'groupinfo'; // команда всем станциям!
+		//$dstr = "reset"; // команда всем станциям!
+		//$dstr = "gettime"; // команда всем станциям!
 		
+		$dstr .= "\0";
 		$GSCP_mes .= pack("A".strlen($dstr),$dstr);
 		
 		if($this->SendBinPacket($GSCP_mes)) {
